@@ -19,7 +19,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (user?.role === 'ADMIN') {
       return '/admin';
     }
-    return '/agent';
+    return '/agent'; // Goes to Today's Calls for agents
   };
 
   return (

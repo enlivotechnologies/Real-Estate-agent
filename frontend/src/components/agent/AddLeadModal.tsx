@@ -19,8 +19,13 @@ const AddLeadModal = ({ isOpen, onClose, onCreateLead, isCreating }: AddLeadModa
     source: LeadSource.CALL,
     status: LeadStatus.NEW,
     followUpDate: getTodayDate(),
+    expectedDealValue: 0,
+    commissionPercentage: 2,
   });
   const [initialNote, setInitialNote] = useState('');
+
+  // Calculate expected commission
+  const expectedCommission = (formData.expectedDealValue * formData.commissionPercentage) / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +39,8 @@ const AddLeadModal = ({ isOpen, onClose, onCreateLead, isCreating }: AddLeadModa
       source: LeadSource.CALL,
       status: LeadStatus.NEW,
       followUpDate: getTodayDate(),
+      expectedDealValue: 0,
+      commissionPercentage: 2,
     });
     setInitialNote('');
   };
@@ -156,6 +163,52 @@ const AddLeadModal = ({ isOpen, onClose, onCreateLead, isCreating }: AddLeadModa
                   }}
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm"
                 />
+              </div>
+            </div>
+
+            {/* Money Visibility Section */}
+            <div className="pt-3 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Deal Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Expected Deal Value (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10000"
+                    value={formData.expectedDealValue || ''}
+                    onChange={(e) => setFormData({ ...formData, expectedDealValue: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm"
+                    placeholder="e.g., 5000000"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Commission (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={formData.commissionPercentage}
+                    onChange={(e) => setFormData({ ...formData, commissionPercentage: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-sm"
+                    placeholder="e.g., 2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Expected Commission (₹)
+                  </label>
+                  <div className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm font-semibold text-green-600">
+                    ₹{expectedCommission.toLocaleString('en-IN')}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

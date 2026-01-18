@@ -2,12 +2,14 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
-import AgentDashboard from './pages/agent/AgentDashboard';
+import TodaysCalls from './pages/agent/TodaysCalls';
 import LeadDetail from './pages/agent/LeadDetail';
 import CreateLead from './pages/agent/CreateLead';
 import AllLeads from './pages/agent/AllLeads';
+import Notifications from './pages/agent/Notifications';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminLeadsList from './pages/admin/AdminLeadsList';
+import AdminNotifications from './pages/admin/AdminNotifications';
 import PrivateRoute from './components/common/PrivateRoute';
 
 function App() {
@@ -18,20 +20,20 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           
-          {/* Agent Routes */}
+          {/* Agent Routes - Direct to Today's Calls */}
           <Route
             path="/agent"
             element={
               <PrivateRoute allowedRoles={['AGENT', 'ADMIN']}>
-                <AgentDashboard />
+                <TodaysCalls />
               </PrivateRoute>
             }
           />
           <Route
-            path="/agent/dashboard"
+            path="/agent/today"
             element={
               <PrivateRoute allowedRoles={['AGENT', 'ADMIN']}>
-                <AgentDashboard />
+                <TodaysCalls />
               </PrivateRoute>
             }
           />
@@ -59,6 +61,14 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/agent/notifications"
+            element={
+              <PrivateRoute allowedRoles={['AGENT', 'ADMIN']}>
+                <Notifications />
+              </PrivateRoute>
+            }
+          />
           
           {/* Admin Routes */}
           <Route
@@ -74,6 +84,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN']}>
                 <AdminLeadsList />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/notifications"
+            element={
+              <PrivateRoute allowedRoles={['ADMIN']}>
+                <AdminNotifications />
               </PrivateRoute>
             }
           />

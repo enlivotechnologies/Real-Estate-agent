@@ -3,7 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { leadsAPI } from '../../services/api';
 import { Lead, FollowUpStatus, LeadStatus } from '../../types';
-import { getFollowUpStatusLabel } from '../../components/agent/utils';
+import { getFollowUpStatusLabel, formatLastContacted } from '../../components/agent/utils';
+
+// Helper function to check if a lead is overdue
+const isLeadOverdue = (lead: Lead): boolean => {
+  if (!lead.followUpDate) return false;
+  // If status is Closed or Lost, it's not overdue
+  if (lead.status === LeadStatus.CLOSED || lead.status === LeadStatus.LOST) return false;
+  // If followUpStatus is COMPLETED or NOT_NEGOTIABLE, it's not overdue
+  if (lead.followUpStatus === FollowUpStatus.COMPLETED || lead.followUpStatus === FollowUpStatus.NOT_NEGOTIABLE) return false;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const followUpDate = new Date(lead.followUpDate);
+  followUpDate.setHours(0, 0, 0, 0);
+  
+  return followUpDate < today;
+};
 
 const AllLeads = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -11,6 +27,7 @@ const AllLeads = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [showDatePicker, setShowDatePicker] = useState<string | null>(null);
+  const [showNotification, setShowNotification] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -178,10 +195,16 @@ const AllLeads = () => {
       const dateObj = new Date(newDate);
       dateObj.setHours(9, 0, 0, 0); // Set to 9 AM
       const isoDateTime = dateObj.toISOString();
+      
+      // Show notification
+      const formattedDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      setShowNotification(`New follow-up date selected: ${formattedDate}`);
+      setTimeout(() => setShowNotification(null), 3000);
 
-      // Update follow-up date
+      // Update follow-up date AND set followUpStatus to FOLLOW_UP_LATER
       const updateData = { 
-        followUpDate: isoDateTime
+        followUpDate: isoDateTime,
+        followUpStatus: FollowUpStatus.FOLLOW_UP_LATER
       };
 
       // Optimistically update the UI
@@ -190,7 +213,8 @@ const AllLeads = () => {
           lead.id === leadId 
             ? { 
                 ...lead, 
-                followUpDate: isoDateTime
+                followUpDate: isoDateTime,
+                followUpStatus: FollowUpStatus.FOLLOW_UP_LATER
               }
             : lead
         )
@@ -219,6 +243,16 @@ const AllLeads = () => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAF9F6' }}>
+      {/* Notification Toast */}
+      {showNotification && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-pulse">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="font-medium">{showNotification}</span>
+        </div>
+      )}
+      
       {/* Top Header Section */}
       <div className="absolute top-0 left-0 right-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-start">
@@ -238,19 +272,25 @@ const AllLeads = () => {
               <h1 className="text-xl font-semibold text-gray-900">
                 All Leads
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                View and manage all your leads
-              </p>
             </div>
           </div>
 
-          {/* Right Side - Back Button */}
+          {/* Right Side - Notifications and Back Button */}
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate('/agent/notifications')}
+              className="p-2 text-gray-700 hover:text-gray-900 transition-colors relative"
+              title="Notifications"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </button>
             <button
               onClick={() => navigate('/agent')}
               className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-all"
             >
-              ← Back to Dashboard
+              ← Today's Calls
             </button>
           </div>
         </div>
@@ -330,28 +370,38 @@ const AllLeads = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Follow up</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Number</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Contacted</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time & Date</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLeads.map((lead) => (
+                  {filteredLeads.map((lead) => {
+                    const overdue = isLeadOverdue(lead);
+                    return (
                     <tr
                       key={lead.id}
                       onClick={() => navigate(`/agent/lead/${lead.id}`)}
-                      className="hover:bg-gray-50 cursor-pointer"
+                      className={`cursor-pointer ${overdue ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center mr-2">
-                            <span className="text-xs font-medium text-gray-700">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center mr-2 ${overdue ? 'bg-red-300' : 'bg-gray-300'}`}>
+                            <span className={`text-xs font-medium ${overdue ? 'text-red-800' : 'text-gray-700'}`}>
                               {lead.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
-                          <div className="text-sm font-medium text-gray-900">{lead.name}</div>
+                          <div className="flex items-center">
+                            <div className={`text-sm font-medium ${overdue ? 'text-red-900' : 'text-gray-900'}`}>{lead.name}</div>
+                            {overdue && (
+                              <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-600 text-white rounded-full">
+                                OVERDUE
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatFollowUpDate(lead.followUpDate)}</div>
+                        <div className={`text-sm ${overdue ? 'text-red-700 font-bold' : 'text-gray-900'}`}>{formatFollowUpDate(lead.followUpDate)}</div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{lead.phone}</div>
@@ -377,27 +427,48 @@ const AllLeads = () => {
                             />
                           </div>
                         ) : (
-                          <select
-                            value={lead.followUpStatus || FollowUpStatus.PENDING}
-                            onChange={(e) => {
-                              const newStatus = e.target.value as FollowUpStatus;
-                              if (newStatus === FollowUpStatus.SELECT_DATE) {
-                                setShowDatePicker(lead.id);
-                              } else {
-                                handleStatusChange(lead.id, newStatus);
-                              }
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={(e) => e.stopPropagation()}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white text-gray-900 cursor-pointer min-w-[160px] font-medium"
-                          >
-                            {Object.values(FollowUpStatus).map((status) => (
-                              <option key={status} value={status}>
-                                {getFollowUpStatusLabel(status)}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex items-center space-x-2">
+                            <select
+                              value={lead.followUpStatus || FollowUpStatus.PENDING}
+                              onChange={(e) => {
+                                const newStatus = e.target.value as FollowUpStatus;
+                                if (newStatus === FollowUpStatus.FOLLOW_UP_LATER) {
+                                  setShowDatePicker(lead.id);
+                                } else {
+                                  handleStatusChange(lead.id, newStatus);
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white text-gray-900 cursor-pointer min-w-[140px] font-medium"
+                            >
+                              {Object.values(FollowUpStatus).filter(status => status !== FollowUpStatus.SELECT_DATE).map((status) => (
+                                <option key={status} value={status}>
+                                  {getFollowUpStatusLabel(status)}
+                                </option>
+                              ))}
+                            </select>
+                            {lead.followUpStatus === FollowUpStatus.FOLLOW_UP_LATER && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowDatePicker(lead.id);
+                                }}
+                                className="p-1 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200 transition-colors"
+                                title="Change follow-up date"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className={`text-sm ${!lead.lastContactedDate ? 'text-red-500 font-medium' : 'text-gray-900'}`}>
+                          {formatLastContacted(lead.lastContactedDate)}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
@@ -405,7 +476,7 @@ const AllLeads = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

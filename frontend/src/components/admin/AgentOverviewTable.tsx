@@ -8,6 +8,14 @@ interface AgentOverview {
   pending: number;
   completed: number;
   pendingWorks: number;
+  // Performance metrics
+  totalLeadsAssigned: number;
+  overdueLeads: number;
+  closedDeals: number;
+  lostDeals: number;
+  commissionClosed: number;
+  commissionLost: number;
+  inProgressCommission: number;
 }
 
 interface AgentOverviewTableProps {
@@ -16,6 +24,16 @@ interface AgentOverviewTableProps {
 }
 
 const AgentOverviewTable = ({ agents, onOpenOverview }: AgentOverviewTableProps) => {
+  // Format currency to Indian Rupees
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   if (agents.length === 0) {
     return (
       <div className="rounded-xl shadow-sm border border-gray-200/60 overflow-hidden" style={{ backgroundColor: '#FEFDFB' }}>
@@ -31,107 +49,116 @@ const AgentOverviewTable = ({ agents, onOpenOverview }: AgentOverviewTableProps)
 
   return (
     <div className="rounded-xl shadow-sm border border-gray-200/60 overflow-hidden" style={{ backgroundColor: '#FEFDFB' }}>
+      <div className="px-6 py-4 border-b border-gray-200/60 bg-gradient-to-r from-gray-50 to-gray-100/50">
+        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Agent Revenue Overview</h3>
+        <p className="text-xs text-gray-500 mt-1">Sorted by highest lost commission, then highest closed commission</p>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full">
           <thead>
-            <tr className="border-b border-gray-200/60">
+            <tr className="border-b border-gray-200/60 bg-gray-50/50">
               <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                 Agent Name
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Today
+              <th className="px-6 py-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Total Leads
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Per Week
+              <th className="px-6 py-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Overdue
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Per Month
+              <th className="px-6 py-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Closed Deals
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Pending
+              <th className="px-6 py-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Lost Deals
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Completed
+              <th className="px-6 py-4 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Commission Closed (₹)
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                Overview
+              <th className="px-6 py-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+                Actions
               </th>
             </tr>
           </thead>
           <tbody>
-            {agents.map((agent, index) => (
-              <tr 
-                key={agent.agentId} 
-                className={`border-b border-gray-100/50 transition-all duration-200 ${
-                  index === agents.length - 1 ? 'border-b-0' : ''
-                } hover:bg-gray-50/40`}
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center mr-3 flex-shrink-0">
-                      <span className="text-sm font-medium text-white">
-                        {agent.agentName.charAt(0).toUpperCase()}
-                      </span>
+            {agents.map((agent, index) => {
+              const hasHighLostCommission = agent.commissionLost > 0;
+              const hasOverdueLeads = agent.overdueLeads > 0;
+              
+              return (
+                <tr 
+                  key={agent.agentId} 
+                  className={`border-b border-gray-100/50 transition-all duration-200 ${
+                    index === agents.length - 1 ? 'border-b-0' : ''
+                  } ${hasHighLostCommission ? 'bg-red-50/40' : 'hover:bg-gray-50/40'}`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 ${
+                        hasHighLostCommission ? 'bg-red-500' : 'bg-blue-500'
+                      }`}>
+                        <span className="text-sm font-medium text-white">
+                          {agent.agentName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{agent.agentName}</div>
+                        <div className="text-xs text-gray-500 truncate mt-0.5">{agent.agentEmail}</div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{agent.agentName}</div>
-                      <div className="text-xs text-gray-500 truncate mt-0.5">{agent.agentEmail}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-gray-900">{agent.leadsToday}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                    </svg>
-                    <span className="text-sm font-semibold text-gray-900">{agent.leadsWeek}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                    </svg>
-                    <span className="text-sm font-semibold text-gray-900">{agent.leadsMonth}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-amber-600">{agent.pending || 0}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-emerald-600">{agent.completed}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenOverview(agent);
-                    }}
-                    className="px-3 py-1.5 bg-gradient-to-b from-yellow-500 to-yellow-400 hover:from-yellow-600 hover:to-yellow-500 text-white text-xs font-medium rounded-lg transition-all shadow-sm"
-                  >
-                    Overview
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className="text-sm font-semibold text-gray-900">{agent.totalLeadsAssigned}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      hasOverdueLeads 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {agent.overdueLeads}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                      {agent.closedDeals}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      agent.lostDeals > 0 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {agent.lostDeals}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <span className={`text-sm font-bold ${
+                      agent.commissionClosed > 0 ? 'text-emerald-600' : 'text-gray-500'
+                    }`}>
+                      {formatCurrency(agent.commissionClosed)}
+                    </span>
+                    {agent.commissionLost > 0 && (
+                      <div className="text-xs text-red-500 mt-0.5">
+                        Lost: {formatCurrency(agent.commissionLost)}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenOverview(agent);
+                      }}
+                      className="px-3 py-1.5 bg-gradient-to-b from-yellow-500 to-yellow-400 hover:from-yellow-600 hover:to-yellow-500 text-white text-xs font-medium rounded-lg transition-all shadow-sm"
+                    >
+                      Details
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

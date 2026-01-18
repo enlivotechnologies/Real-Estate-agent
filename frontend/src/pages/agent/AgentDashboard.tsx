@@ -127,9 +127,10 @@ const AgentDashboard = () => {
       dateObj.setHours(9, 0, 0, 0); // Set to 9 AM
       const isoDateTime = dateObj.toISOString();
 
-      // Update follow-up date
+      // Update follow-up date AND set followUpStatus to FOLLOW_UP_LATER
       const updateData = { 
-        followUpDate: isoDateTime
+        followUpDate: isoDateTime,
+        followUpStatus: FollowUpStatus.FOLLOW_UP_LATER
       };
 
       // Optimistically update the UI
@@ -138,7 +139,8 @@ const AgentDashboard = () => {
           lead.id === leadId 
             ? { 
                 ...lead, 
-                followUpDate: isoDateTime
+                followUpDate: isoDateTime,
+                followUpStatus: FollowUpStatus.FOLLOW_UP_LATER
               }
             : lead
         )

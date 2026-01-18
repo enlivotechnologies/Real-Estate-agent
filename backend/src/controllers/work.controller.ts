@@ -295,6 +295,142 @@ export const completeWork = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getWorkStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const baseWhere: any = {};
+    
+    // Agents only see their own works
+    if (req.userRole === 'AGENT') {
+      baseWhere.assignedToId = req.userId;
+    }
+
+    // Total works count
+    const totalWorks = await prisma.work.count({
+      where: baseWhere
+    });
+
+    // Completed works count
+    const completedWorks = await prisma.work.count({
+      where: {
+        ...baseWhere,
+        status: WorkStatus.COMPLETED
+      }
+    });
+
+    // Pending works count (due before today and not completed)
+    const pendingWorks = await prisma.work.count({
+      where: {
+        ...baseWhere,
+        status: WorkStatus.PENDING,
+        completedAt: null,
+        dueDate: {
+          lt: today
+        }
+      }
+    });
+
+    // Works due today
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const worksDueToday = await prisma.work.count({
+      where: {
+        ...baseWhere,
+        status: WorkStatus.PENDING,
+        completedAt: null,
+        dueDate: {
+          gte: today,
+          lt: tomorrow
+        }
+      }
+    });
+
+    // Get recent completed works (last 7 days)
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const recentCompletedWorks = await prisma.work.findMany({
+      where: {
+        ...baseWhere,
+        status: WorkStatus.COMPLETED,
+        completedAt: {
+          gte: sevenDaysAgo
+        }
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            phone: true
+          }
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { completedAt: 'desc' },
+      take: 20
+    });
+
+    // Get pending works (due before today)
+    const pendingWorksList = await prisma.work.findMany({
+      where: {
+        ...baseWhere,
+        status: WorkStatus.PENDING,
+        completedAt: null,
+        dueDate: {
+          lt: today
+        }
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            followUpStatus: true
+          }
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 50
+    });
+
+    // Filter out works where lead's followUpStatus is COMPLETED or NOT_NEGOTIABLE
+    const filteredPendingWorks = pendingWorksList.filter(work => {
+      if (!work || !work.lead) return true;
+      const followUpStatus = work.lead.followUpStatus;
+      return followUpStatus !== FollowUpStatus.COMPLETED && 
+             followUpStatus !== FollowUpStatus.NOT_NEGOTIABLE;
+    });
+
+    res.json({
+      totalWorks,
+      completedWorks,
+      pendingWorks: filteredPendingWorks.length,
+      worksDueToday,
+      recentCompletedWorks,
+      pendingWorksList: filteredPendingWorks
+    });
+  } catch (error) {
+    console.error('Get work stats error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 export const deleteWork = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;

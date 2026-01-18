@@ -7,7 +7,41 @@ interface DashboardOverviewProps {
 const DashboardOverview = ({ stats }: DashboardOverviewProps) => {
   return (
     <div className="mb-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Dashboard Overview</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Revenue Overview</h2>
+      
+      {/* Critical Alerts - Overdue Follow-ups and Not Contacted */}
+      {((stats?.overdueLeadsCount || 0) > 0 || (stats?.leadsNotContactedIn3Days || 0) > 0) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
+          {/* Overdue Follow-ups */}
+          {(stats?.overdueLeadsCount || 0) > 0 && (
+            <div className="rounded-xl shadow-sm p-4 border-2 border-red-300 bg-red-50">
+              <div className="flex items-center space-x-3 mb-3">
+                <svg className="h-6 w-6 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="text-sm font-bold text-red-800">Overdue Follow-ups</div>
+              </div>
+              <div className="text-3xl font-bold text-red-600">{stats?.overdueLeadsCount || 0}</div>
+              <p className="text-xs text-red-700 mt-1">Leads past their follow-up date</p>
+            </div>
+          )}
+
+          {/* Leads Not Contacted in 3 Days */}
+          {(stats?.leadsNotContactedIn3Days || 0) > 0 && (
+            <div className="rounded-xl shadow-sm p-4 border-2 border-orange-300 bg-orange-50">
+              <div className="flex items-center space-x-3 mb-3">
+                <svg className="h-6 w-6 text-orange-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-sm font-bold text-orange-800">Not Contacted (3+ days)</div>
+              </div>
+              <div className="text-3xl font-bold text-orange-600">{stats?.leadsNotContactedIn3Days || 0}</div>
+              <p className="text-xs text-orange-700 mt-1">Leads not contacted in last 3 days</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {/* Total Leads */}
         <div className="rounded-xl shadow-sm p-4 border border-black/10" style={{ backgroundColor: '#FEFDFB' }}>
@@ -60,7 +94,7 @@ const DashboardOverview = ({ stats }: DashboardOverviewProps) => {
             <svg className="h-6 w-6 text-yellow-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="text-sm font-medium text-gray-900">Pending Works</div>
+            <div className="text-sm font-medium text-gray-900">In Progress</div>
           </div>
           <div className="text-3xl font-bold text-gray-900">
             {stats?.pendingWorks !== undefined && stats?.pendingWorks !== null 

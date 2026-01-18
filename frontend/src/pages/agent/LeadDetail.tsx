@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/common/Layout';
 import { leadsAPI, notesAPI } from '../../services/api';
-import { Lead, Note, LeadStatus, LeadSource } from '../../types';
+import { Lead, Note, LeadStatus, LeadSource, ActivityLog } from '../../types';
 
 const LeadDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -112,7 +112,7 @@ const LeadDetail = () => {
             onClick={() => navigate('/agent')}
             className="text-blue-600 hover:text-blue-700"
           >
-            ← Back to Leads
+            ← Back to Today's Calls
           </button>
         </div>
 
@@ -162,10 +162,12 @@ const LeadDetail = () => {
               <input
                 type="date"
                 value={formData.followUpDate}
+                min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setFormData({ ...formData, followUpDate: e.target.value })}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">Required - Every lead must have a follow-up date</p>
             </div>
 
             <div className="flex space-x-3">
@@ -211,6 +213,76 @@ const LeadDetail = () => {
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(note.createdAt).toLocaleString()}
                   </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Activity Log Section - Lightweight for owner trust */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <svg className="h-5 w-5 text-gray-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Activity Log
+          </h2>
+          {(!lead.activityLogs || lead.activityLogs.length === 0) ? (
+            <p className="text-gray-500 text-sm">No activity recorded yet</p>
+          ) : (
+            <div className="space-y-3">
+              {lead.activityLogs.map((activity: ActivityLog) => (
+                <div key={activity.id} className="flex items-start space-x-3 py-2 border-b border-gray-100 last:border-b-0">
+                  {/* Activity Icon */}
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    activity.action === 'STATUS_CHANGE' ? 'bg-purple-100' :
+                    activity.action === 'FOLLOWUP_UPDATE' ? 'bg-blue-100' :
+                    activity.action === 'FOLLOWUP_STATUS_CHANGE' ? 'bg-green-100' :
+                    activity.action === 'LEAD_CREATED' ? 'bg-yellow-100' :
+                    'bg-gray-100'
+                  }`}>
+                    {activity.action === 'STATUS_CHANGE' && (
+                      <svg className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                    )}
+                    {activity.action === 'FOLLOWUP_UPDATE' && (
+                      <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                    {activity.action === 'FOLLOWUP_STATUS_CHANGE' && (
+                      <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    {activity.action === 'LEAD_CREATED' && (
+                      <svg className="h-4 w-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    )}
+                    {!['STATUS_CHANGE', 'FOLLOWUP_UPDATE', 'FOLLOWUP_STATUS_CHANGE', 'LEAD_CREATED'].includes(activity.action) && (
+                      <svg className="h-4 w-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                  </div>
+                  
+                  {/* Activity Details */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900">{activity.description}</p>
+                    <div className="flex items-center mt-1 text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">{activity.agentName}</span>
+                      <span className="mx-1">•</span>
+                      <span>{new Date(activity.createdAt).toLocaleDateString('en-GB', { 
+                        day: '2-digit', 
+                        month: 'short', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}</span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

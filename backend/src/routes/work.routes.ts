@@ -4,6 +4,7 @@ import {
   createWork,
   getWorks,
   getPendingWorksFromYesterday,
+  getWorkStats,
   updateWork,
   completeWork,
   deleteWork
@@ -17,6 +18,7 @@ router.use(authenticate);
 router.post('/', createWork);
 router.get('/', getWorks);
 router.get('/pending-yesterday', getPendingWorksFromYesterday);
+router.get('/stats', getWorkStats);
 router.put('/:id', updateWork);
 router.patch('/:id/complete', completeWork);
 router.delete('/:id', deleteWork);

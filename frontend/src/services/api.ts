@@ -115,6 +115,17 @@ export const worksAPI = {
     const response = await api.get('/works/pending-yesterday');
     return response.data;
   },
+  getWorkStats: async (): Promise<{
+    totalWorks: number;
+    completedWorks: number;
+    pendingWorks: number;
+    worksDueToday: number;
+    recentCompletedWorks: Work[];
+    pendingWorksList: Work[];
+  }> => {
+    const response = await api.get('/works/stats');
+    return response.data;
+  },
   updateWork: async (id: string, work: Partial<Work>): Promise<Work> => {
     const response = await api.put(`/works/${id}`, work);
     return response.data;

@@ -53,3 +53,23 @@ export const getLeadStatusLabel = (status: LeadStatus) => {
   };
   return labels[status] || status;
 };
+
+export const formatLastContacted = (dateString?: string) => {
+  if (!dateString) return 'Never';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) {
+    return 'Today';
+  } else if (diffDays === 1) {
+    return 'Yesterday';
+  } else if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  } else {
+    const month = date.toLocaleString('default', { month: 'short' });
+    const day = date.getDate();
+    return `${month} ${day}`;
+  }
+};

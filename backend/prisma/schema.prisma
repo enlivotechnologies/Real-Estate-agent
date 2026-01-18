@@ -29,6 +29,9 @@ enum LeadSource {
   WHATSAPP
   PORTAL
   WALK_IN
+  FACEBOOK
+  REFERRAL
+  OTHER
 }
 
 enum WorkStatus {
@@ -64,23 +67,31 @@ model User {
 }
 
 model Lead {
-  id             String          @id @default(uuid())
-  name           String
-  phone          String
-  project        String?
-  location       String?
-  source         LeadSource
-  status         LeadStatus      @default(NEW)
-  followUpDate   DateTime // Mandatory - no lead without follow-up date
-  followUpStatus FollowUpStatus? // Follow-up status for tracking
-  assignedToId   String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id                   String          @id @default(uuid())
+  name                 String
+  phone                String
+  project              String?
+  location             String?
+  source               LeadSource
+  status               LeadStatus      @default(NEW)
+  followUpDate         DateTime // Mandatory - no lead without follow-up date
+  followUpStatus       FollowUpStatus? // Follow-up status for tracking
+  
+  // New fields for money visibility
+  expectedDealValue    Float?          @default(0) // Expected deal value in ₹
+  commissionPercentage Float?          @default(2) // Commission percentage (default 2%)
+  expectedCommission   Float?          @default(0) // Auto-calculated: expectedDealValue * commissionPercentage / 100
+  lastContactedDate    DateTime?       // Last time this lead was contacted
+  
+  assignedToId         String
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   // Relations
-  assignedTo User   @relation(fields: [assignedToId], references: [id], onDelete: Cascade)
-  notes      Note[]
-  works      Work[]
+  assignedTo     User           @relation(fields: [assignedToId], references: [id], onDelete: Cascade)
+  notes          Note[]
+  works          Work[]
+  activityLogs   ActivityLog[]
 
   @@map("leads")
 }
@@ -115,4 +126,22 @@ model Work {
   assignedTo User @relation(fields: [assignedToId], references: [id], onDelete: Cascade)
 
   @@map("works")
+}
+
+// Activity Log for tracking lead changes
+model ActivityLog {
+  id          String   @id @default(uuid())
+  leadId      String
+  agentId     String
+  agentName   String   // Denormalized for quick display
+  action      String   // e.g., "STATUS_CHANGE", "FOLLOWUP_UPDATE"
+  oldValue    String?  // Previous value
+  newValue    String?  // New value
+  description String   // Human-readable description
+  createdAt   DateTime @default(now())
+
+  // Relations
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("activity_logs")
 }

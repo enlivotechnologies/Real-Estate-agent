@@ -17,6 +17,9 @@ export enum LeadSource {
   WHATSAPP = 'WHATSAPP',
   PORTAL = 'PORTAL',
   WALK_IN = 'WALK_IN',
+  FACEBOOK = 'FACEBOOK',
+  REFERRAL = 'REFERRAL',
+  OTHER = 'OTHER',
 }
 
 export enum WorkStatus {
@@ -58,6 +61,15 @@ export interface Lead {
   notes?: Note[];
   createdAt?: string;
   updatedAt?: string;
+  // New money visibility fields
+  expectedDealValue?: number;
+  commissionPercentage?: number;
+  expectedCommission?: number;
+  lastContactedDate?: string;
+  // Activity logs for owner trust
+  activityLogs?: ActivityLog[];
+  // Computed field for UI
+  isOverdue?: boolean;
 }
 
 export interface Note {
@@ -74,6 +86,13 @@ export interface DashboardStats {
   siteVisitsDone: number;
   dealsClosed: number;
   pendingWorks: number;
+  // Money visibility stats
+  totalExpectedCommission?: number;
+  closedCommission?: number;
+  lostCommission?: number;
+  inProgressCommission?: number;
+  overdueLeadsCount?: number;
+  leadsNotContactedIn3Days?: number;
   // Admin-specific stats
   totalAgents?: number;
   totalLeadsGenerated?: number;
@@ -111,4 +130,31 @@ export interface Work {
   lead?: Lead;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Activity Log for tracking lead changes
+export interface ActivityLog {
+  id: string;
+  leadId: string;
+  agentId: string;
+  agentName: string;
+  action: string;
+  oldValue?: string;
+  newValue?: string;
+  description: string;
+  createdAt: string;
+}
+
+// Agent Performance for owner view
+export interface AgentPerformance {
+  agentId: string;
+  agentName: string;
+  agentEmail: string;
+  totalLeadsAssigned: number;
+  overdueLeads: number;
+  closedDeals: number;
+  lostDeals: number;
+  commissionClosed: number;
+  commissionLost: number;
+  inProgressCommission: number;
 }

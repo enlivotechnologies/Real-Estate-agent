@@ -313,6 +313,32 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
       pendingWorks: pendingWorksCount
     };
 
+    // Calculate money visibility stats (for all users)
+    // Overdue leads count
+    const overdueLeadsCount = await prisma.lead.count({
+      where: {
+        ...where,
+        followUpDate: { lt: today },
+        status: { notIn: [LeadStatus.CLOSED, LeadStatus.LOST] }
+      }
+    });
+    response.overdueLeadsCount = overdueLeadsCount;
+
+    // Leads not contacted in last 3 days
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const leadsNotContactedIn3Days = await prisma.lead.count({
+      where: {
+        ...where,
+        status: { notIn: [LeadStatus.CLOSED, LeadStatus.LOST] },
+        OR: [
+          { lastContactedDate: null },
+          { lastContactedDate: { lt: threeDaysAgo } }
+        ]
+      }
+    });
+    response.leadsNotContactedIn3Days = leadsNotContactedIn3Days;
+
     // Add admin-specific stats
     if (req.userRole === 'ADMIN') {
       response.totalAgents = totalAgents;
@@ -326,6 +352,38 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
       response.newContactsToday = newContactsToday;
       response.activityRate = activityRate;
       response.leadsCreatedToday = leadsCreatedToday;
+      
+      // Money visibility stats (Owner view)
+      // Total Expected Commission - all leads not lost
+      const allLeadsForMoney = await prisma.lead.findMany({
+        where: {},
+        select: {
+          status: true,
+          expectedCommission: true
+        }
+      });
+      
+      let totalExpectedCommission = 0;
+      let closedCommission = 0;
+      let lostCommission = 0;
+      let inProgressCommission = 0;
+      
+      for (const lead of allLeadsForMoney) {
+        const commission = lead.expectedCommission || 0;
+        if (lead.status === LeadStatus.CLOSED) {
+          closedCommission += commission;
+        } else if (lead.status === LeadStatus.LOST) {
+          lostCommission += commission;
+        } else {
+          inProgressCommission += commission;
+        }
+        totalExpectedCommission += commission;
+      }
+      
+      response.totalExpectedCommission = totalExpectedCommission;
+      response.closedCommission = closedCommission;
+      response.lostCommission = lostCommission;
+      response.inProgressCommission = inProgressCommission;
     }
 
     res.json(response);
@@ -476,6 +534,61 @@ export const getAgentOverview = async (req: AuthRequest, res: Response) => {
                  followUpStatus !== FollowUpStatus.NOT_NEGOTIABLE;
         }).length;
 
+        // NEW: Performance metrics for Owner view
+        // Total leads assigned
+        const totalLeadsAssigned = await prisma.lead.count({
+          where: { assignedToId: agent.id }
+        });
+
+        // Overdue leads
+        const overdueLeads = await prisma.lead.count({
+          where: {
+            assignedToId: agent.id,
+            followUpDate: { lt: today },
+            status: { notIn: [LeadStatus.CLOSED, LeadStatus.LOST] }
+          }
+        });
+
+        // Closed deals
+        const closedDeals = await prisma.lead.count({
+          where: {
+            assignedToId: agent.id,
+            status: LeadStatus.CLOSED
+          }
+        });
+
+        // Lost deals
+        const lostDeals = await prisma.lead.count({
+          where: {
+            assignedToId: agent.id,
+            status: LeadStatus.LOST
+          }
+        });
+
+        // Commission stats
+        const agentLeadsForMoney = await prisma.lead.findMany({
+          where: { assignedToId: agent.id },
+          select: {
+            status: true,
+            expectedCommission: true
+          }
+        });
+
+        let commissionClosed = 0;
+        let commissionLost = 0;
+        let inProgressCommission = 0;
+
+        for (const lead of agentLeadsForMoney) {
+          const commission = lead.expectedCommission || 0;
+          if (lead.status === LeadStatus.CLOSED) {
+            commissionClosed += commission;
+          } else if (lead.status === LeadStatus.LOST) {
+            commissionLost += commission;
+          } else {
+            inProgressCommission += commission;
+          }
+        }
+
         return {
           agentId: agent.id,
           agentName: agent.name,
@@ -483,12 +596,28 @@ export const getAgentOverview = async (req: AuthRequest, res: Response) => {
           leadsToday,
           leadsWeek,
           leadsMonth,
-          pending: pendingWorks, // Pending column now shows pending works count
+          pending: pendingWorks,
           completed: completedLeads,
-          pendingWorks: pendingWorks // Keep for backward compatibility
+          pendingWorks: pendingWorks,
+          // New performance metrics
+          totalLeadsAssigned,
+          overdueLeads,
+          closedDeals,
+          lostDeals,
+          commissionClosed,
+          commissionLost,
+          inProgressCommission
         };
       })
     );
+
+    // Sort by highest lost commission first, then by highest closed commission
+    agentStats.sort((a, b) => {
+      if (b.commissionLost !== a.commissionLost) {
+        return b.commissionLost - a.commissionLost;
+      }
+      return b.commissionClosed - a.commissionClosed;
+    });
 
     res.json(agentStats);
   } catch (error: any) {

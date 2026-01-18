@@ -4,7 +4,7 @@ import { UserRole } from '../../types';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
-  allowedRoles: UserRole[];
+  allowedRoles: UserRole[] | string[];
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, allowedRoles }) => {
@@ -22,7 +22,17 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, allowedRoles }) =
     return <Navigate to="/login" replace />;
   }
 
-  if (user && !allowedRoles.includes(user.role)) {
+  // Compare role as uppercase string to handle both string and enum values
+  const userRole = user?.role?.toString().toUpperCase();
+  const allowed = allowedRoles.map(r => r.toString().toUpperCase());
+  
+  if (user && !allowed.includes(userRole || '')) {
+    // Redirect based on actual role
+    if (userRole === 'ADMIN') {
+      return <Navigate to="/admin" replace />;
+    } else if (userRole === 'AGENT') {
+      return <Navigate to="/agent" replace />;
+    }
     return <Navigate to="/login" replace />;
   }
 

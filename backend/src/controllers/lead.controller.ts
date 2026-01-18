@@ -3,9 +3,44 @@ import prisma from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { LeadStatus, LeadSource, FollowUpStatus, WorkStatus } from '@prisma/client';
 
+// Helper function to calculate expected commission
+const calculateCommission = (dealValue: number, percentage: number): number => {
+  return (dealValue * percentage) / 100;
+};
+
+// Helper function to log activity
+const logActivity = async (
+  leadId: string,
+  agentId: string,
+  agentName: string,
+  action: string,
+  description: string,
+  oldValue?: string,
+  newValue?: string
+) => {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        leadId,
+        agentId,
+        agentName,
+        action,
+        description,
+        oldValue,
+        newValue
+      }
+    });
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+};
+
 export const createLead = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, phone, project, location, source, status, followUpDate, followUpStatus, assignedToId } = req.body;
+    const { 
+      name, phone, project, location, source, status, followUpDate, followUpStatus, assignedToId,
+      expectedDealValue, commissionPercentage 
+    } = req.body;
 
     // Validation
     if (!name || !phone || !source || !followUpDate) {
@@ -20,6 +55,17 @@ export const createLead = async (req: AuthRequest, res: Response) => {
 
     // If assignedToId not provided, assign to current user (agent)
     const assignedTo = assignedToId || req.userId;
+    
+    // Calculate commission
+    const dealValue = expectedDealValue || 0;
+    const commPercent = commissionPercentage || 2; // Default 2%
+    const expectedCommission = calculateCommission(dealValue, commPercent);
+
+    // Get agent name for activity log
+    const agent = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { name: true }
+    });
 
     const lead = await prisma.lead.create({
       data: {
@@ -30,8 +76,12 @@ export const createLead = async (req: AuthRequest, res: Response) => {
         source: source as LeadSource,
         status: (status as LeadStatus) || LeadStatus.NEW,
         followUpDate: followUp,
-        followUpStatus: (followUpStatus as FollowUpStatus) || FollowUpStatus.PENDING, // Set default to PENDING
-        assignedToId: assignedTo
+        followUpStatus: (followUpStatus as FollowUpStatus) || FollowUpStatus.PENDING,
+        assignedToId: assignedTo,
+        expectedDealValue: dealValue,
+        commissionPercentage: commPercent,
+        expectedCommission: expectedCommission,
+        lastContactedDate: null
       },
       include: {
         assignedTo: {
@@ -43,6 +93,17 @@ export const createLead = async (req: AuthRequest, res: Response) => {
         }
       }
     });
+
+    // Log activity for lead creation
+    await logActivity(
+      lead.id,
+      req.userId!,
+      agent?.name || 'Unknown',
+      'LEAD_CREATED',
+      `Lead created with status ${lead.status}`,
+      undefined,
+      lead.status
+    );
 
     // Automatically create a work item for this lead's follow-up
     try {
@@ -97,7 +158,18 @@ export const getLeads = async (req: AuthRequest, res: Response) => {
       orderBy: { followUpDate: 'asc' }
     });
 
-    res.json(leads);
+    // Add isOverdue flag to each lead
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const leadsWithOverdue = leads.map(lead => ({
+      ...lead,
+      isOverdue: lead.followUpDate < today && 
+                 lead.status !== LeadStatus.CLOSED && 
+                 lead.status !== LeadStatus.LOST
+    }));
+
+    res.json(leadsWithOverdue);
   } catch (error) {
     console.error('Get leads error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -127,6 +199,10 @@ export const getLeadById = async (req: AuthRequest, res: Response) => {
         },
         notes: {
           orderBy: { createdAt: 'desc' }
+        },
+        activityLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 50 // Limit to last 50 activities
         }
       }
     });
@@ -134,8 +210,15 @@ export const getLeadById = async (req: AuthRequest, res: Response) => {
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
     }
+    
+    // Add isOverdue flag
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOverdue = lead.followUpDate < today && 
+                      lead.status !== LeadStatus.CLOSED && 
+                      lead.status !== LeadStatus.LOST;
 
-    res.json(lead);
+    res.json({ ...lead, isOverdue });
   } catch (error) {
     console.error('Get lead by id error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -145,7 +228,10 @@ export const getLeadById = async (req: AuthRequest, res: Response) => {
 export const updateLead = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, phone, project, location, source, status, followUpDate, followUpStatus, assignedToId } = req.body;
+    const { 
+      name, phone, project, location, source, status, followUpDate, followUpStatus, assignedToId,
+      expectedDealValue, commissionPercentage 
+    } = req.body;
 
     // Check if lead exists and user has access
     const existingLead = await prisma.lead.findFirst({
@@ -159,6 +245,12 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Lead not found' });
     }
 
+    // Get agent name for activity logging
+    const agent = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { name: true }
+    });
+
     // Follow-up date is mandatory - cannot update to remove it
     if (followUpDate) {
       const followUp = new Date(followUpDate);
@@ -168,21 +260,60 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
     }
 
     const updateData: any = {};
+    const activityLogs: Array<{action: string, description: string, oldValue?: string, newValue?: string}> = [];
+    
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
     if (project !== undefined) updateData.project = project;
     if (location !== undefined) updateData.location = location;
     if (source) updateData.source = source as LeadSource;
     
+    // Handle money visibility fields
+    if (expectedDealValue !== undefined) {
+      updateData.expectedDealValue = expectedDealValue;
+      // Recalculate commission
+      const commPercent = commissionPercentage !== undefined ? commissionPercentage : (existingLead.commissionPercentage || 2);
+      updateData.expectedCommission = calculateCommission(expectedDealValue, commPercent);
+    }
+    
+    if (commissionPercentage !== undefined) {
+      updateData.commissionPercentage = commissionPercentage;
+      // Recalculate commission
+      const dealValue = expectedDealValue !== undefined ? expectedDealValue : (existingLead.expectedDealValue || 0);
+      updateData.expectedCommission = calculateCommission(dealValue, commissionPercentage);
+    }
+    
     let newFollowUpDate: Date | null = null;
     if (followUpDate) {
       newFollowUpDate = new Date(followUpDate);
       updateData.followUpDate = newFollowUpDate;
+      
+      // Log follow-up date change
+      activityLogs.push({
+        action: 'FOLLOWUP_UPDATE',
+        description: `Follow-up date changed`,
+        oldValue: existingLead.followUpDate?.toISOString().split('T')[0],
+        newValue: newFollowUpDate.toISOString().split('T')[0]
+      });
     }
     
     // Handle status and followUpStatus updates with bidirectional consistency
     if (status) {
+      const oldStatus = existingLead.status;
       updateData.status = status as LeadStatus;
+      
+      // Log status change
+      if (oldStatus !== status) {
+        activityLogs.push({
+          action: 'STATUS_CHANGE',
+          description: `Status changed from ${oldStatus} to ${status}`,
+          oldValue: oldStatus,
+          newValue: status
+        });
+        
+        // Update lastContactedDate when status changes (indicates interaction)
+        updateData.lastContactedDate = new Date();
+      }
       
       // If status is set to CLOSED, ensure followUpStatus is COMPLETED
       if (status === LeadStatus.CLOSED && existingLead.followUpStatus !== FollowUpStatus.COMPLETED) {
@@ -199,7 +330,22 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: `Invalid follow-up status: ${followUpStatus}` });
       }
       
+      const oldFollowUpStatus = existingLead.followUpStatus;
       updateData.followUpStatus = followUpStatus as FollowUpStatus;
+      
+      // Log follow-up status change
+      if (oldFollowUpStatus !== followUpStatus) {
+        activityLogs.push({
+          action: 'FOLLOWUP_STATUS_CHANGE',
+          description: `Follow-up status changed from ${oldFollowUpStatus || 'none'} to ${followUpStatus}`,
+          oldValue: oldFollowUpStatus || undefined,
+          newValue: followUpStatus
+        });
+        
+        // Update lastContactedDate when follow-up status changes
+        updateData.lastContactedDate = new Date();
+      }
+      
       console.log(`Updating lead ${id} followUpStatus to: ${followUpStatus}`);
       
       // Handle status changes based on followUpStatus
@@ -334,6 +480,19 @@ export const updateLead = async (req: AuthRequest, res: Response) => {
         } catch (workError) {
           console.error(`[Lead Updated] Failed to mark works as completed for lead ${id}:`, workError);
         }
+      }
+      
+      // Log all activity changes
+      for (const activityLog of activityLogs) {
+        await logActivity(
+          id,
+          req.userId!,
+          agent?.name || 'Unknown',
+          activityLog.action,
+          activityLog.description,
+          activityLog.oldValue,
+          activityLog.newValue
+        );
       }
       
       res.json(lead);
